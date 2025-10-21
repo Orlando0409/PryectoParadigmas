@@ -1,0 +1,53 @@
+﻿version: '3.9'
+
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.100.0
+    container_name: otel-collector
+    command: ["--config=/etc/otel/config.yaml"]
+    volumes:
+      - ./otel-config.yaml:/etc/otel/config.yaml:ro
+    ports:
+      - "4317:4317"   # gRPC (para OTLP)
+      - "4318:4318"   # HTTP (si algún cliente lo usa)
+      - "9464:9464"   # Prometheus metrics
+    depends_on:
+      - prometheus
+      - loki
+  payments-api:
+    build:
+      context: ./payments-api
+      dockerfile: Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_SERVICE_NAME=payments-api
+      - OTEL_RESOURCE_ATTRIBUTES=service.version=1.0.0,env=dev
+    ports:
+      - "8080:8080"
+    depends_on:
+      - otel-collector
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+
+  loki:
+    image: grafana/loki:latest
+    command: -config.file=/etc/loki/local-config.yaml
+    ports:
+      - "3100:3100"
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+      - loki
