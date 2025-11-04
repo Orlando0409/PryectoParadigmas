@@ -3,12 +3,20 @@ using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
+using Payments.API.Services;
+using Payments.API.Data;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
 var serviceName = "payments-api";
 var serviceVersion = "1.0.0";
 var endpoint = new Uri(Environment.GetEnvironmentVariable("OTEL_EXPORTER_OTLP_ENDPOINT") ?? "http://otel-collector:4317");
+
+// Configurar MySQL
+var connectionString = builder.Configuration.GetConnectionString("MySqlConnection");
+builder.Services.AddDbContext<PaymentsDbContext>(options =>
+    options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
 
 // LOGS
 builder.Logging.ClearProviders();
@@ -43,6 +51,9 @@ builder.Services.AddOpenTelemetry()
           .AddMeter("payments-api-meter")
           .AddOtlpExporter(o => o.Endpoint = endpoint);
     });
+// Servicios
+builder.Services.AddSingleton<RabbitMQService>();
+builder.Services.AddHostedService<PaymentProcessorService>();
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
