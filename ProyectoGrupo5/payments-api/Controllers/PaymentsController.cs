@@ -1,57 +1,96 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
-using System.Diagnostics;
-using System.Diagnostics.Metrics;
+using Payments.API.Data;
+using Payments.API.Services;
+using payments_api.Models;
+using Microsoft.EntityFrameworkCore;
 
 [ApiController]
 [Route("payments")]
 public class PaymentsController : ControllerBase
 {
     private readonly ILogger<PaymentsController> _logger;
+    private readonly PaymentsDbContext _dbContext;
+    private readonly RabbitMQService _rabbitMQ;
 
-    private static readonly ActivitySource ActivitySource = new("payments-api");
-    private static readonly Meter Meter = new("payments-api-meter");
-    private static readonly Counter<long> PaymentsCounter =
-        Meter.CreateCounter<long>("payments.processed.count");
-
-    public PaymentsController(ILogger<PaymentsController> logger)
+    public PaymentsController(ILogger<PaymentsController> logger, PaymentsDbContext dbContext, RabbitMQService rabbitMQ)
     {
         _logger = logger;
+        _dbContext = dbContext;
+        _rabbitMQ = rabbitMQ;
     }
 
     [HttpGet("health")]
     public IActionResult Health() => Ok(new { status = "ok" });
 
-    [HttpPost("process")]
-    public IActionResult Process([FromBody] PaymentRequest req)
+    // 🧪 Endpoint de PRUEBA - Simular solicitud de pago de RabbitMQ
+    [HttpPost("test/process")]
+    public IActionResult TestProcessPayment([FromBody] SolicitudPago solicitud)
     {
-        using var activity = ActivitySource.StartActivity("ProcessPayment");
+        _logger.LogInformation("Simulando envío de solicitud de pago a RabbitMQ...");
+        
+        // Publicar el mensaje a la cola como si viniera del grupo 4
+        _rabbitMQ.PublicarConfirmacion(solicitud, "pagos.solicitudes");
 
-        try
+        return Ok(new { 
+            message = "Solicitud enviada a RabbitMQ. Revisa los logs para ver el procesamiento.",
+            solicitud 
+        });
+    }
+
+    // Endpoint para consultar el saldo de una tarjeta
+    [HttpGet("cards/{cardNumber}/balance")]
+    public async Task<IActionResult> GetBalance(string cardNumber)
+    {
+        var card = await _dbContext.Cards.FirstOrDefaultAsync(c => c.Card_Number == cardNumber);
+
+        if (card == null)
+            return NotFound(new { error = "Tarjeta no encontrada" });
+
+        return Ok(new { cardNumber = card.Card_Number, balance = card.Money });
+    }
+
+    // Endpoint para crear/registrar una tarjeta
+    [HttpPost("cards")]
+    public async Task<IActionResult> CreateCard([FromBody] CreateCardRequest request)
+    {
+        var existingCard = await _dbContext.Cards
+            .FirstOrDefaultAsync(c => c.Card_Number == request.CardNumber);
+
+        if (existingCard != null)
+            return BadRequest(new { error = "La tarjeta ya existe" });
+
+        var card = new Card
         {
-            // Simular un error de negocio
-            if (req.Amount <= 0)
-            {
-                _logger.LogWarning("La compra no se ha realizado: monto inválido ({Amount}).", req.Amount);
-                PaymentsCounter.Add(1, new KeyValuePair<string, object?>("status", "FAILED"));
-                return BadRequest(new { error = "Monto inválido" });
-            }
+            User_Id = request.UserId,
+            Card_Type = request.CardType,
+            Card_Number = request.CardNumber,
+            Money = request.InitialBalance,
+            Expiration_Date = request.ExpirationDate
+        };
 
-            // Simular éxito
-            PaymentsCounter.Add(1, new KeyValuePair<string, object?>("status", "PROCESSED"));
-            _logger.LogInformation(
-                "La compra se ha realizado correctamente. Monto: {Amount} {Currency}, ID: {PurchaseId}",
-                req.Amount, req.Currency, req.PurchaseId);
+        _dbContext.Cards.Add(card);
+        await _dbContext.SaveChangesAsync();
 
-            return Ok(new { result = "processed" });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error inesperado al procesar la compra: {Message}", ex.Message);
-            PaymentsCounter.Add(1, new KeyValuePair<string, object?>("status", "ERROR"));
-            return StatusCode(500, new { error = "Error interno" });
-        }
+        _logger.LogInformation("Tarjeta creada: {CardNumber}, Usuario: {UserId}, Tipo: {CardType}, Saldo: {Money}",
+            card.Card_Number, card.User_Id, card.Card_Type, card.Money);
+
+        return Ok(new { message = "Tarjeta creada exitosamente", card });
+    }
+
+    // Endpoint para listar todas las tarjetas
+    [HttpGet("cards")]
+    public async Task<IActionResult> GetAllCards()
+    {
+        var cards = await _dbContext.Cards.ToListAsync();
+        return Ok(cards);
     }
 }
 
-public record PaymentRequest(decimal Amount, string Currency, string PurchaseId);
+public record CreateCardRequest(
+    int UserId, 
+    string CardType, 
+    string CardNumber, 
+    int InitialBalance, 
+    DateTime ExpirationDate
+);
