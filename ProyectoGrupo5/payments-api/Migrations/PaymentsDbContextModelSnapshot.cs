@@ -24,36 +24,30 @@ namespace payments_api.Migrations
 
             modelBuilder.Entity("payments_api.Models.Card", b =>
                 {
-                    b.Property<int>("Id")
+                    b.Property<int>("Card_Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Card_Id"));
 
-                    b.Property<decimal>("Balance")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<string>("CardHolder")
+                    b.Property<string>("Card_Number")
                         .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("varchar(200)");
+                        .HasColumnType("longtext");
 
-                    b.Property<string>("CardNumber")
+                    b.Property<string>("Card_Type")
                         .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("varchar(20)");
+                        .HasColumnType("longtext");
 
-                    b.Property<DateTime>("CreatedAt")
+                    b.Property<DateTime>("Expiration_Date")
                         .HasColumnType("datetime(6)");
 
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("datetime(6)");
+                    b.Property<int>("Money")
+                        .HasColumnType("int");
 
-                    b.HasKey("Id");
+                    b.Property<int>("User_Id")
+                        .HasColumnType("int");
 
-                    b.HasIndex("CardNumber")
-                        .IsUnique();
+                    b.HasKey("Card_Id");
 
                     b.ToTable("Cards");
                 });
