@@ -2,7 +2,7 @@
 {
     public class ConfirmacionPago
     {
-        public string IdCompra { get; set; } = string.Empty;
+        public int IdCompra { get; set; }
         public string Estado { get; set; } = string.Empty; // "aprobado" o "rechazado"
         public string Mensaje { get; set; } = string.Empty;
         public DateTime Timestamp { get; set; } = DateTime.UtcNow;
@@ -10,9 +10,11 @@
 
     public class SolicitudPago
     {
-        public string IdCompra { get; set; } = string.Empty;
+        public int Purchase_Id { get; set; }
+        public int Card_Id { get; set; }
         public decimal Total { get; set; }
-        public TarjetaPago Tarjeta { get; set; } = new();
+        public DateTime PurchaseDate { get; set; } = DateTime.UtcNow;
+        public int User_Id { get; set; }
     }
 
     public class TarjetaPago

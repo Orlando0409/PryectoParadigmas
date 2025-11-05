@@ -53,7 +53,9 @@ builder.Services.AddOpenTelemetry()
     });
 // Servicios
 builder.Services.AddSingleton<RabbitMQService>();
-builder.Services.AddHostedService<PaymentProcessorService>();
+// Registrar PaymentProcessorService como singleton y también como HostedService
+builder.Services.AddSingleton<PaymentProcessorService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<PaymentProcessorService>());
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();

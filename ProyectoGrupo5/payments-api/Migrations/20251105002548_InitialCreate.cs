@@ -19,27 +19,21 @@ namespace payments_api.Migrations
                 name: "Cards",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "int", nullable: false)
+                    Card_Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("MySql:ValueGenerationStrategy", MySqlValueGenerationStrategy.IdentityColumn),
-                    CardNumber = table.Column<string>(type: "varchar(20)", maxLength: 20, nullable: false)
+                    User_Id = table.Column<int>(type: "int", nullable: false),
+                    Card_Type = table.Column<string>(type: "longtext", nullable: false)
                         .Annotation("MySql:CharSet", "utf8mb4"),
-                    CardHolder = table.Column<string>(type: "varchar(200)", maxLength: 200, nullable: false)
+                    Card_Number = table.Column<string>(type: "longtext", nullable: false)
                         .Annotation("MySql:CharSet", "utf8mb4"),
-                    Balance = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "datetime(6)", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "datetime(6)", nullable: false)
+                    Money = table.Column<int>(type: "int", nullable: false),
+                    Expiration_Date = table.Column<DateTime>(type: "datetime(6)", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Cards", x => x.Id);
+                    table.PrimaryKey("PK_Cards", x => x.Card_Id);
                 })
                 .Annotation("MySql:CharSet", "utf8mb4");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Cards_CardNumber",
-                table: "Cards",
-                column: "CardNumber",
-                unique: true);
         }
 
         /// <inheritdoc />

@@ -11,30 +11,38 @@ public class PaymentsController : ControllerBase
 {
     private readonly ILogger<PaymentsController> _logger;
     private readonly PaymentsDbContext _dbContext;
-    private readonly RabbitMQService _rabbitMQ;
+    private readonly PaymentProcessorService _paymentProcessor;
 
-    public PaymentsController(ILogger<PaymentsController> logger, PaymentsDbContext dbContext, RabbitMQService rabbitMQ)
+    public PaymentsController(
+        ILogger<PaymentsController> logger,
+        PaymentsDbContext dbContext,
+        PaymentProcessorService paymentProcessor)
     {
         _logger = logger;
         _dbContext = dbContext;
-        _rabbitMQ = rabbitMQ;
+        _paymentProcessor = paymentProcessor;
     }
 
     [HttpGet("health")]
     public IActionResult Health() => Ok(new { status = "ok" });
 
-    // 🧪 Endpoint de PRUEBA - Simular solicitud de pago de RabbitMQ
-    [HttpPost("test/process")]
-    public IActionResult TestProcessPayment([FromBody] SolicitudPago solicitud)
+    // Endpoint principal para procesar pagos via HTTP
+    [HttpPost("process")]
+    public async Task<IActionResult> ProcessPayment([FromBody] SolicitudPago solicitud)
     {
-        _logger.LogInformation("Simulando envío de solicitud de pago a RabbitMQ...");
-        
-        // Publicar el mensaje a la cola como si viniera del grupo 4
-        _rabbitMQ.PublicarConfirmacion(solicitud, "pagos.solicitudes");
+        Console.WriteLine($"Procesando pago :{solicitud.Purchase_Id }");
+        var (success, message, nuevoSaldo) = await _paymentProcessor.ProcesarPago(solicitud, _dbContext);
 
-        return Ok(new { 
-            message = "Solicitud enviada a RabbitMQ. Revisa los logs para ver el procesamiento.",
-            solicitud 
+        if (!success)
+        {
+            return BadRequest(new { error = message, saldoActual = nuevoSaldo });
+        }
+
+        return Ok(new
+        {
+            message,
+            idCompra = solicitud.Purchase_Id,
+            nuevoSaldo
         });
     }
 
@@ -88,9 +96,9 @@ public class PaymentsController : ControllerBase
 }
 
 public record CreateCardRequest(
-    int UserId, 
-    string CardType, 
-    string CardNumber, 
-    int InitialBalance, 
+    int UserId,
+    string CardType,
+    string CardNumber,
+    int InitialBalance,
     DateTime ExpirationDate
 );

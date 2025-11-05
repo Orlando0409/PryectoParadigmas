@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Payments.API.Data;
 using payments_api.Models;
 using System.Text.Json;
@@ -33,16 +33,15 @@ public class PaymentProcessorService : BackgroundService
 
         _rabbitMQ.RecibirCompra("pagos.solicitudes", async (message) =>
         {
-            await ProcesarSolicitudPago(message);
+            await ProcesarSolicitudPagoDesdeRabbitMQ(message);
         });
 
         return Task.CompletedTask;
     }
 
-    private async Task ProcesarSolicitudPago(string message)
+    // Procesa mensajes que llegan desde RabbitMQ
+    private async Task ProcesarSolicitudPagoDesdeRabbitMQ(string message)
     {
-        using var activity = ActivitySource.StartActivity("ProcessPayment");
-        
         try
         {
             var solicitud = JsonSerializer.Deserialize<SolicitudPago>(message);
@@ -52,24 +51,41 @@ public class PaymentProcessorService : BackgroundService
                 return;
             }
 
-            _logger.LogInformation(
-                "Procesando solicitud de pago. ID: {IdCompra}, Total: {Total}, Tarjeta: {Numero}",
-                solicitud.IdCompra, solicitud.Total, solicitud.Tarjeta.Numero);
-
             using var scope = _scopeFactory.CreateScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<PaymentsDbContext>();
+            
+            await ProcesarPago(solicitud, dbContext);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error al procesar mensaje de RabbitMQ: {Message}", ex.Message);
+        }
+    }
+
+    // Método público que contiene la lógica de procesamiento (puede ser usado desde el Controller)
+    public async Task<(bool Success, string Message, int? NuevoSaldo)> ProcesarPago(
+        SolicitudPago solicitud, 
+        PaymentsDbContext dbContext)
+    {
+        using var activity = ActivitySource.StartActivity("ProcessPayment");
+        
+        try
+        {
+            _logger.LogInformation(
+                "Procesando solicitud de pago. ID: {IdCompra}, Total: {Total}, Tarjeta: {Numero}",
+                solicitud.Purchase_Id, solicitud.Total, solicitud.Card_Id);
 
             // Buscar la tarjeta en la base de datos
             var tarjeta = await dbContext.Cards
-                .FirstOrDefaultAsync(c => c.Card_Number == solicitud.Tarjeta.Numero);
+                .FirstOrDefaultAsync(c => c.Card_Id == solicitud.Card_Id);
 
             if (tarjeta == null)
             {
-                _logger.LogWarning("La compra no se ha realizado: tarjeta no encontrada ({Numero}).", solicitud.Tarjeta.Numero);
+                _logger.LogWarning("La compra no se ha realizado: tarjeta no encontrada ({Numero}).", solicitud.Card_Id);
                 PaymentsCounter.Add(1, new KeyValuePair<string, object?>("status", "FAILED"));
 
-                EnviarConfirmacion(solicitud.IdCompra, "rechazado", "Tarjeta no encontrada");
-                return;
+                EnviarConfirmacion(solicitud.Purchase_Id, "rechazado", "Tarjeta no encontrada");
+                return (false, "Tarjeta no encontrada", null);
             }
 
             // Validar saldo suficiente
@@ -80,33 +96,36 @@ public class PaymentProcessorService : BackgroundService
                     tarjeta.Card_Number, tarjeta.Money, solicitud.Total);
                 PaymentsCounter.Add(1, new KeyValuePair<string, object?>("status", "FAILED"));
 
-                EnviarConfirmacion(solicitud.IdCompra, "rechazado", "Saldo insuficiente");
-                return;
+                EnviarConfirmacion(solicitud.Purchase_Id, "rechazado", "Saldo insuficiente");
+                return (false, "Saldo insuficiente", tarjeta.Money);
             }
 
-            // ? Restar el monto del saldo
+            // ✔ Restar el monto del saldo
             tarjeta.Money -= (int)solicitud.Total;
             await dbContext.SaveChangesAsync();
 
             PaymentsCounter.Add(1, new KeyValuePair<string, object?>("status", "PROCESSED"));
             _logger.LogInformation(
                 "La compra se ha realizado correctamente. Monto: {Total}, ID: {IdCompra}, Tarjeta: {Numero}, Nuevo saldo: {Money}",
-                solicitud.Total, solicitud.IdCompra, tarjeta.Card_Number, tarjeta.Money);
+                solicitud.Total, solicitud.Purchase_Id, tarjeta.Card_Number, tarjeta.Money);
 
-            EnviarConfirmacion(solicitud.IdCompra, "aprobado", "Pago procesado");
+            EnviarConfirmacion(solicitud.Purchase_Id, "aprobado", "Pago procesado");
+            
+            return (true, "Pago procesado exitosamente", tarjeta.Money);
         }
         catch (Exception ex)
         {
             PaymentsCounter.Add(1, new KeyValuePair<string, object?>("status", "ERROR"));
             _logger.LogError(ex, "Error inesperado al procesar la compra: {Message}", ex.Message);
+            return (false, "Error interno al procesar el pago", null);
         }
     }
 
-    private void EnviarConfirmacion(string idCompra, string estado, string mensaje)
+    private void EnviarConfirmacion(int PurchaceId, string estado, string mensaje)
     {
         var confirmacion = new ConfirmacionPago
         {
-            IdCompra = idCompra,
+            IdCompra = PurchaceId,
             Estado = estado,
             Mensaje = mensaje,
             Timestamp = DateTime.UtcNow
@@ -116,7 +135,7 @@ public class PaymentProcessorService : BackgroundService
         _rabbitMQ.PublicarConfirmacion(confirmacion, routingKey);
 
         _logger.LogInformation(
-            "Confirmaci�n enviada a RabbitMQ. ID: {IdCompra}, Estado: {Estado}",
-            idCompra, estado);
+            "Confirmación enviada a RabbitMQ. ID: {IdCompra}, Estado: {Estado}",
+            PurchaceId, estado);
     }
 }
