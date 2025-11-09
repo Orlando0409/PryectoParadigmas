@@ -1,20 +1,30 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 
 namespace payments_api.Models
 {
+    [Table("Cards")] 
     public class Card
     {
-        [Key,Required]
+        [Key]
+        [Column("Card_Id")]
         public int Card_Id { get; set; }
+
+        [Column("User_Id")]
         public int User_Id { get; set; }
-        [Required]
+
+        [Column("Card_Type")]
         public string Card_Type { get; set; }
-        [Required]
+
+        [Column("Card_Number")]
         public string Card_Number { get; set; }
-        [Required]
+
+        [Column("Money")]
         public int Money { get; set; }
-        [Required]
+
+
+        [Column("Expiration_Date")]
         public DateTime Expiration_Date { get; set; }
     }
 }
