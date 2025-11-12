@@ -25,10 +25,10 @@
       "dotnetRunMessages": true,
       "launchBrowser": true,
       "launchUrl": "swagger",
-      "applicationUrl": "https://26.88.140.28:7147;http://26.88.140.28:5062",
+      "applicationUrl": "https://26.166.216.244:7147;http://26.166.216.244:5062",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "OTEL_EXPORTER_OTLP_ENDPOINT": "http://26.88.140.28:4317"
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "http://26.166.216.244:4317"
       }
     },
     "IIS Express": {

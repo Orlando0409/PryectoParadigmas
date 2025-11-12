@@ -16,8 +16,8 @@ public class RabbitMQService : IDisposable
         _factory = new ConnectionFactory
         {
             HostName = "26.155.73.119",
-            UserName =  "admin",
-            Password =  "admin123"
+            UserName = "admin",
+            Password = "admin123"
         };
     }
 
@@ -34,14 +34,26 @@ public class RabbitMQService : IDisposable
     {
         EnsureConnected();
 
+        // Declarar la queue si no existe
+        _channel!.QueueDeclare(
+            queue: "pagos.dashboard",
+            durable: true,
+            exclusive: false,
+            autoDelete: false,
+            arguments: null
+        );
+
         var body = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(mensaje));
 
+        // ✅ CAMBIO CRÍTICO AQUÍ
         _channel!.BasicPublish(
-            exchange: "pagos.exchange",
-            routingKey: routingKey,
+            exchange: "",                    // ✅ VACÍO (sin comillas de exchange)
+            routingKey: "pagos.dashboard",   // ✅ Nombre exacto de la queue
             basicProperties: null,
             body: body
         );
+
+        Console.WriteLine($"✅ Mensaje publicado a pagos.dashboard: {JsonSerializer.Serialize(mensaje)}");
     }
 
     public void RecibirCompra(string queueName, Action<string> onMessageReceived)
@@ -58,6 +70,7 @@ public class RabbitMQService : IDisposable
         );
 
         var consumer = new EventingBasicConsumer(_channel);
+
         consumer.Received += (model, ea) =>
         {
             var body = ea.Body.ToArray();
