@@ -30,7 +30,7 @@ public class PaymentsController : ControllerBase
     [HttpPost("process")]
     public async Task<IActionResult> ProcessPayment([FromBody] SolicitudPago solicitud)
     {
-        Console.WriteLine($"Procesando pago :{solicitud.Purchase_Id }");
+        _logger.LogInformation($"Procesando pago :{solicitud.Purchase_Id }");
         var (success, message, nuevoSaldo) = await _paymentProcessor.ProcesarPago(solicitud, _dbContext);
 
         if (!success)
